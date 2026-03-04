@@ -22,7 +22,8 @@ const saveReminders = () => {
 
 const loadReminders = () => {
     if (fs.existsSync("reminders.json")) {
-        const data = fs.readFileSync("reminders.json");
+        const data = fs.readFileSync("reminders.json", "utf-8");
+        if (data === "") return [];
         const loadedReminders = JSON.parse(data);
 
         return loadedReminders;
