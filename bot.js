@@ -9,148 +9,148 @@ const client = new Client({
 
 client.on("qr", (qr) => {
     qrcode.generate(qr, { small: true });
-    console.log("📱 | Escanie o QR Code com seu Whatsapp!")
+    console.log("📱 | Scan the QR Code with your Whatsapp!")
 });
 
-const lembretesPendentes = {}
-const estados = {}
-const lembreteTemp = {}
+const pendingReminders = {}
+const states = {}
+const tempReminder = {}
 
-const salvarLembretes = () => {
-    fs.writeFileSync("lembretes.json", JSON.stringify(lembretes));
+const saveReminders = () => {
+    fs.writeFileSync("reminders.json", JSON.stringify(reminders));
 }
 
-const carregarLembretes = () => {
-    if (fs.existsSync("lembretes.json")) {
-        const dados = fs.readFileSync("lembretes.json");
-        const lembretesCarregados = JSON.parse(dados);
+const loadReminders = () => {
+    if (fs.existsSync("reminders.json")) {
+        const data = fs.readFileSync("reminders.json");
+        const loadedReminders = JSON.parse(data);
 
-        return lembretesCarregados;
+        return loadedReminders;
     } else {
         return [];
     }
 }
 
-const lembretes = carregarLembretes();
+const reminders = loadReminders();
 
-const formatarNumero = (destino) => {
-    return destino + "@c.us"
+const formatNumber = (destination) => {
+    return destination + "@c.us"
 }
 
-const converterHorario = (horario) => {
-    const [hora, minuto] = horario.split(":");
-    return `0 ${minuto} ${hora} * * *`;
+const convertTime = (time) => {
+    const [hour, minute] = time.split(":");
+    return `0 ${minute} ${hour} * * *`;
 }
 
-const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const agendarLembrete = (lembrete) => {
-    cron.schedule(converterHorario(lembrete.horario), async () => {
-        await client.sendMessage(lembrete.destino, `⏰ Lembrete: *${lembrete.mensagem}*\nPara continuar escolha uma opção abaixo:\n\n[1] Confirmar ✅\n[2] Cancelar ❌\n[3] Adiar 30 minutos ⏳`);
+const scheduleReminder = (reminder) => {
+    cron.schedule(convertTime(reminder.time), async () => {
+        await client.sendMessage(reminder.destination, `⏰ Reminder: *${reminder.message}*\nTo continue, choose an option below:\n\n[1] Continue ✅\n[2] Cancel ❌\n[3] Delay 30 minutes ⏳`);
 
-        lembretesPendentes[lembrete.destino] = lembrete;
-        estados[lembrete.destino] = "aguardando_confirmacao";
+        pendingReminders[reminder.destination] = reminder;
+        states[reminder.destination] = "waiting_confirmation";
     });
 }
 
 client.on("ready", async () => {
-    console.log("✅ | Bot conectado!");
-    lembretes.forEach(lembrete => {
-        agendarLembrete(lembrete);
+    console.log("✅ | System started!");
+    reminders.forEach(reminder => {
+        scheduleReminder(reminder);
     });
 })
 
 client.on("message_create", async (msg) => {   
     if (msg.fromMe) return;
 
-    if (estados[msg.from] === "aguardando_nome") {
+    if (states[msg.from] === "waiting_name") {
 
-        lembreteTemp[msg.from] = { nome: msg.body };
-        estados[msg.from] = "aguardando_horario";
-        await esperar(2000);
-        await msg.reply("⏰ Qual o horário? (ex: 08:00)");
+        tempReminder[msg.from] = { name: msg.body };
+        states[msg.from] = "waiting_time";
+        await wait(2000);
+        await msg.reply("⏰ What time? (e.g.: 08:00)");
 
-    } else if (estados[msg.from] === "aguardando_horario") {
+    } else if (states[msg.from] === "waiting_time") {
 
-        lembreteTemp[msg.from].horario = msg.body;
-        estados[msg.from] = "aguardando_mensagem";
-        await esperar(2000);
-        await msg.reply("📃 Qual a mensagem do lembrete?");
+        tempReminder[msg.from].time = msg.body;
+        states[msg.from] = "waiting_message";
+        await wait(2000);
+        await msg.reply("📃 What is the reminder message?");
 
-    } else if (estados[msg.from] === "aguardando_mensagem") {
+    } else if (states[msg.from] === "waiting_message") {
 
-        lembreteTemp[msg.from].mensagem = msg.body;
-        lembreteTemp[msg.from].destino = msg.from;
-        lembretes.push(lembreteTemp[msg.from]);
-        agendarLembrete(lembreteTemp[msg.from]);
-        estados[msg.from] = null;
-        salvarLembretes();
-        await esperar(2000);
-        await msg.reply("✅ Lembrete criado com sucesso!");
+        tempReminder[msg.from].message = msg.body;
+        tempReminder[msg.from].destination = msg.from;
+        reminders.push(tempReminder[msg.from]);
+        scheduleReminder(tempReminder[msg.from]);
+        states[msg.from] = null;
+        saveReminders();
+        await wait(2000);
+        await msg.reply("✅ Reminder created successfully!");
 
-    } else if (estados[msg.from] === "aguardando_confirmacao") {
+    } else if (states[msg.from] === "waiting_confirmation") {
         
         if (msg.body === "1") {
-            await esperar(2000);
-            await msg.reply("✅ Lembrete confirmado!");
+            await wait(2000);
+            await msg.reply("✅ Reminder confirmed!");
         } else if (msg.body === "2") {
-            await esperar(2000);
-            await msg.reply("❌ Lembrete cancelado!");
+            await wait(2000);
+            await msg.reply("❌ Reminder canceled!");
         } else if (msg.body === "3") {
-            const agora = new Date();
-            agora.setMinutes(agora.getMinutes() + 30);
-            const novoLembrete = { ...lembretesPendentes[msg.from], horario: `${agora.getHours()}:${agora.getMinutes().toString().padStart(2, "0")}` };
-            lembretes.push(novoLembrete);
-            agendarLembrete(novoLembrete);
-            await esperar(2000);
-            await msg.reply("⏳ Lembrete adiado 30 minutos!");
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 30);
+            const newReminder = { ...pendingReminders[msg.from], time: `${now.getHours()}:${now.getMinutes().toString().padStart(2, "0")}` };
+            reminders.push(newReminder);
+            scheduleReminder(newReminder);
+            await wait(2000);
+            await msg.reply("⏳ Reminder delayed 30 minutes!");
         }
-        delete lembretesPendentes[msg.from];
-        estados[msg.from] = null;
+        delete pendingReminders[msg.from];
+        states[msg.from] = null;
 
-    } else if (estados[msg.from] === "deletando") {
+    } else if (states[msg.from] === "deleting") {
         const index = parseInt(msg.body) - 1;
-        if (index >= 0 && index < lembretes.length) {
-            const lembrete = lembretes[index];
-            lembretes.splice(index, 1);
-            salvarLembretes();
-            await esperar(2000);
-            await msg.reply(`🗑️ Lembrete ${lembrete.nome} deletado com sucesso!`);
+        if (index >= 0 && index < reminders.length) {
+            const reminder = reminders[index];
+            reminders.splice(index, 1);
+            saveReminders();
+            await wait(2000);
+            await msg.reply(`🗑️ Reminder "${reminder.name}" deleted successfully!`);
         } else {
-            await esperar(2000);
-            await msg.reply("❌ Número inválido!");
+            await wait(2000);
+            await msg.reply("❌ Invalid number!");
         }
-        estados[msg.from] = null;
+        states[msg.from] = null;
 
     } else {
 
-        if (msg.body.toLowerCase() === "lembretes") {
+        if (msg.body.toLowerCase() === "reminders") {
 
-            let lista = "📋 Meus lembretes ativos:\n\n";
-            lembretes.forEach( async (lembrete) => {
-                lista += `${lembrete.nome} - ${lembrete.horario}\n`;
+            let list = "📋 My active reminders:\n\n";
+            reminders.forEach(async (reminder) => {
+                list += `${reminder.name} - ${reminder.time}\n`;
             })
-            await esperar(2000);
-            await msg.reply(lista);
+            await wait(2000);
+            await msg.reply(list);
 
-        } else if (msg.body.toLowerCase() === "criar lembrete") {
+        } else if (msg.body.toLowerCase() === "create reminder") {
 
-            estados[msg.from] = "aguardando_nome";
-            await esperar(2000);
-            await msg.reply("📌 Qual o nome do lembrete?");
+            states[msg.from] = "waiting_name";
+            await wait(2000);
+            await msg.reply("📌 What is the name of the reminder?");
 
-        } else if (msg.body.toLowerCase() === "deletar lembrete") {
-            let lista = "🗑️ Lembretes ativos:\n";
-            lembretes.forEach( async (lembrete, index) => {
-                lista += `${index + 1}. ${lembrete.nome} - ${lembrete.horario}\n`;
+        } else if (msg.body.toLowerCase() === "delete reminder") {
+            let list = "🗑️ Active reminders:\n";
+            reminders.forEach(async (reminder, index) => {
+                list += `${index + 1}. ${reminder.name} - ${reminder.time}\n`;
             })
-            estados[msg.from] = "deletando";
-            await esperar(2000);
-            await msg.reply(lista + "\nDigite o número do lembrete que deseja deletar.");
+            states[msg.from] = "deleting";
+            await wait(2000);
+            await msg.reply(list + "\nEnter the number of the reminder you want to delete.");
 
-        } else if (msg.body.toLowerCase() === "ajuda") {
-            await esperar(2000);
-            await msg.reply("📋 Comandos disponíveis:\n\n- Criar lembrete\n- Deletar lembrete\n- Lembretes\n- Ajuda");
+        } else if (msg.body.toLowerCase() === "help") {
+            await wait(2000);
+            await msg.reply("📋 Available commands:\n\n- Create reminder\n- Delete reminder\n- Reminders\n- Help");
         }
     }
 });
