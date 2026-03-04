@@ -44,7 +44,7 @@ cd whatsapp-reminder-bot
 npm install
 
 # 3. Start the bot
-node index.js
+node bot.js
 ```
 
 A **QR Code** will appear in the terminal. Just scan it with WhatsApp:
